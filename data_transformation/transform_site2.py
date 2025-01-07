@@ -9,7 +9,7 @@ class VehicleDataConfig:
     column_mapping: Dict[str, str]
     ordered_keys: List[str]
 
-class VehicleDataTransformer:
+class VehicleDataTransformer_site2:
     """Clase para transformar datos de vehículos."""
 
     def __init__(self, config: VehicleDataConfig):
@@ -286,7 +286,7 @@ class VehicleDataTransformer:
 
 
 # Configuración predeterminada
-DEFAULT_CONFIG = VehicleDataConfig(
+DEFAULT_CONFIG_2 = VehicleDataConfig(
     column_mapping={
         "14 Axles/Wheels": "Number of axles / wheels",
         "21 Powered axles": "Powered axles",
@@ -335,9 +335,9 @@ DEFAULT_CONFIG = VehicleDataConfig(
         "Working principle",
         "Direct injection",
         "Pure electric",
-        "Capacity",
         "Hybrid [electric] vehicle",
         "Number and arrangement of cylinders",
+        "Capacity",
         "Fuel",
         "Maximum net power",
         "Clutch",

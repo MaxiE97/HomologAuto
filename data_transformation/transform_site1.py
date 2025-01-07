@@ -9,7 +9,7 @@ class VehicleDataConfig:
     column_mapping: Dict[str, str]
     ordered_keys: List[str]
 
-class VehicleDataTransformer:
+class VehicleDataTransformer_site1:
     """Clase para transformar datos de vehículos."""
 
     def __init__(self, config: VehicleDataConfig):
@@ -217,7 +217,7 @@ class VehicleDataTransformer:
 
 
 # Configuración predeterminada
-DEFAULT_CONFIG = VehicleDataConfig(
+DEFAULT_CONFIG_1 = VehicleDataConfig(
     column_mapping={
         "Eigenschappen - Aantal wielen": "wheel",
         "Afmetingen - Wielbasis": "Wheelbase",

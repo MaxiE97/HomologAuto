@@ -1,158 +1,54 @@
 import pandas as pd
 import streamlit as st
-from utils.campos_planilla import df_planilla
 from scraping.scraping_site_1 import Site1Scraper
+from scraping.scraping_site_2 import Site2Scraper
+from data_transformation.transform_site1 import VehicleDataTransformer_site1, DEFAULT_CONFIG_1
+from data_transformation.transform_site2 import VehicleDataTransformer_site2, DEFAULT_CONFIG_2
 
-
-#--------------------------- PARTE DE NORMALIZACIÓN--------------------------------------------------   
-
-def normalize_keys(df):
-    """
-    Normaliza las claves del DataFrame convirtiéndolas a minúsculas y reemplazando caracteres especiales.
-    """
-    df["Clave"] = df["Clave"].str.lower().str.replace(r'\W+', '_', regex=True)
-    return df
-
-def transformar_dataframe(df):
-    """
-    Aplica transformaciones al DataFrame según reglas específicas.
-    """
-    reglas = {
-        'algemeen_merk': lambda valor: 'BMW' if valor == 'Bmw' else valor,
-    }
-
-    def aplicar_reglas(row):
-        clave = row["Clave"]
-        valor = row["Valor"]
-
-        # Aplicar reglas específicas
-        if clave in reglas:
-            return reglas[clave](valor)
-
-        # Transformar valores de cm a mm
-        if isinstance(valor, str) and valor.endswith('cm'):
-            try:
-                return str(int(valor.replace('cm', '').strip()) * 10)
-            except ValueError:
-                return valor
-
-        # Procesar valores que terminan en 'kg'
-        if isinstance(valor, str) and valor.endswith('kg'):
-            # Eliminar puntos solo si el valor termina en 'kg'
-            valor = valor.replace('.', '').replace('kg', '').strip()
-            return valor
-
-        return valor
-
-    df["Valor"] = df.apply(aplicar_reglas, axis=1)
-    return df
-
-
-
-#--------------------------- INTERFAZ CON STREAMLIT------------------------------------   
-st.title("Extracción datos para homologación")
-
-if 'editable_table' not in st.session_state:
-    st.session_state.editable_table = pd.DataFrame(columns=["Clave", "Valor"])
-
-if 'editable_table_planilla' not in st.session_state:
-    st.session_state.editable_table_planilla = df_planilla.copy()
-
-url = st.text_input("Ingresa primer enlace de la página web:")
+# Instanciar scraper y transformadores
 site1_scraper = Site1Scraper()
+site2_scraper = Site2Scraper()
+vehicle_data_transformer_site1 = VehicleDataTransformer_site1(DEFAULT_CONFIG_1)
+vehicle_data_transformer_site2 = VehicleDataTransformer_site2(DEFAULT_CONFIG_2)
 
+# Título de la aplicación
+st.title("Extracción de datos para homologación")
 
-if st.button("Extraer y transformar datos"):
-    if url:
-        with st.spinner("Extrayendo y transformando datos..."):
-            result = site1_scraper.scrape(url)
+# Sección para ingresar URLs
+st.subheader("Ingreso de URLs")
+url_site1 = st.text_input("Ingrese la URL del Sitio 1:", "")
+url_site2 = st.text_input("Ingrese la URL del Sitio 2:", "")
 
-            if isinstance(result, str):
-                st.error(result)
-            else:
-                normalized_df = normalize_keys(result)
-                transformed_df = transformar_dataframe(normalized_df)
+# Contenedores para las tablas
+st.subheader("Resultados")
 
-                st.session_state.editable_table = transformed_df
+# Botón único para procesar
+if st.button("Procesar URLs"):
+    if not url_site1 and not url_site2:
+        st.warning("Por favor, ingrese al menos una URL para procesar los datos.")
     else:
-        st.error("Por favor, introduce un enlace válido.")
+        # Procesar URL del Sitio 1 si está disponible
+        if url_site1:
+            try:
+                st.write("Procesando datos del Sitio 1...")
+                data_site1 = site1_scraper.scrape(url_site1)
+                df_site1 = vehicle_data_transformer_site1.transform(data_site1)
+                st.write("Datos transformados del Sitio 1:")
+                st.dataframe(df_site1)
+            except Exception as e:
+                st.error(f"Error al procesar el Sitio 1: {e}")
+        else:
+            st.info("No se ingresó URL para el Sitio 1.")
 
-if not st.session_state.editable_table.empty:
-    st.success("Datos extraídos y transformados con éxito.")
-
-    # Mostrar tabla editable principal
-    edited_table = st.data_editor(
-        st.session_state.editable_table,
-        use_container_width=True,
-    )
-
- #---------------------------MAPEO DE DATOS--------------------------------------------------   
-
-
-# Diccionario de mapeo entre claves extraídas y campos de df_planilla
-mapeo_claves = {
-    "afmetingen_wielbasis": "Wheelbase :(mm)",
-    "as_1_spoorbreedte / as_2_spoorbreedte": "Axle(s) track 1/ 2: (mm)",
-    "afmetingen_lengte": "Length:(mm)",
-    "afmetingen_breedte": "Width:(mm)",
-    "massa_rijklaar_gewicht": "Mass of the vehicle with bodywork in running order:(kg)",
-    "massa_technisch_limiet_massa": "Technically permissable maximum laden mass:(kg)",
-    "as_1_technisch_limiet / as_2_technisch_limiet": "Distribution of this mass among the axles – 1 / 2:(kg)",
-    "as_1_technisch_limiet / as_2_technisch_limiet": "Technically perm. max mass on each axle – 1 / 2:(kg)",
-    "trekkracht_maximaal_trekgewicht_geremd / trekkracht_maximaal_trekgewicht_ongeremd": "Maximum mass of trailer – braked / unbraked:(kg)",
-    "massa_maximum_massa_samenstelling": "Maximum mass of combination:(kg)",
-    "algemeen_merk": "Engine manufacturer:",
-    "motor_motorcode": "Engine code as marked on the engine:",
-    "motor_aantal_cilinders": "Number and arrangement of cylinders:",
-    
-    
-
-
-    # Más mapeos aquí
-}
-
-# Solo ejecuta si la tabla extraída está lista
-if "editable_table" in st.session_state and not st.session_state.editable_table.empty:
-    # Inicializar la columna "Datos" si no existe
-    if "Datos" not in st.session_state.editable_table_planilla.columns:
-        st.session_state.editable_table_planilla["Datos"] = None
-
-    # Iterar sobre el mapeo de claves
-    for clave_extraida, campo_planilla in mapeo_claves.items():
-        if " / " in clave_extraida:  # Detectar clave compuesta
-            subclaves = clave_extraida.split(" / ")
-            valores = []
-            for subclave in subclaves:
-                valor = (
-                    st.session_state.editable_table.loc[
-                        st.session_state.editable_table["Clave"] == subclave, "Valor"
-                    ].iloc[0]
-                    if subclave in st.session_state.editable_table["Clave"].values
-                    else "N/A"  # Valor predeterminado si falta la clave
-                )
-                valores.append(valor)
-            valor_correspondiente = " / ".join(valores)  # Combinar valores con separador
-        else:  # Caso simple
-            valor_correspondiente = (
-                st.session_state.editable_table.loc[
-                    st.session_state.editable_table["Clave"] == clave_extraida, "Valor"
-                ].iloc[0]
-                if clave_extraida in st.session_state.editable_table["Clave"].values
-                else None
-            )
-
-        # Asignar el valor a la fila correspondiente en df_planilla
-        st.session_state.editable_table_planilla.loc[
-            st.session_state.editable_table_planilla["Nombre"] == campo_planilla, "Datos"
-        ] = valor_correspondiente
-
-    # Mostrar la tabla actualizada
-    st.success("df_planilla actualizado con los datos extraídos.")
-    st.data_editor(
-        st.session_state.editable_table_planilla,
-        use_container_width=True,
-    )
-
-
-
-
+        # Procesar URL del Sitio 2 si está disponible
+        if url_site2:
+            try:
+                st.write("Procesando datos del Sitio 2...")
+                data_site2 = site2_scraper.scrape(url_site2)
+                df_site2 = vehicle_data_transformer_site2.transform(data_site2)
+                st.write("Datos transformados del Sitio 2:")
+                st.dataframe(df_site2)
+            except Exception as e:
+                st.error(f"Error al procesar el Sitio 2: {e}")
+        else:
+            st.info("No se ingresó URL para el Sitio 2.")
