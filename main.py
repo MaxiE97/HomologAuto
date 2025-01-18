@@ -1,9 +1,11 @@
 import pandas as pd
 import streamlit as st
+from st_aggrid import AgGrid, GridUpdateMode, GridOptionsBuilder
 from scraping.scraping_site_1 import Site1Scraper
 from scraping.scraping_site_2 import Site2Scraper
 from data_transformation.transform_site1 import VehicleDataTransformer_site1, DEFAULT_CONFIG_1
 from data_transformation.transform_site2 import VehicleDataTransformer_site2, DEFAULT_CONFIG_2
+from exportToFile import WordExporter
 
 class DataProcessor:
     """
@@ -30,36 +32,25 @@ class DataProcessor:
 
     @staticmethod
     def merge_dataframes(df1, df2):
-        """
-        Combina los dataframes manteniendo el orden original y aplicando la lógica de valores
-        """
+        """Combina los dataframes manteniendo el orden original"""
         if df1 is not None and df2 is not None:
-            # Crear un índice para mantener el orden original
             df1['original_index'] = range(len(df1))
-            
-            # Merge de los dataframes
             merged_df = pd.merge(df1, df2, on='Key', how='outer', suffixes=('_site1', '_site2'))
-            
-            # Rellenar el índice original para las filas nuevas
             merged_df['original_index'] = merged_df['original_index'].fillna(merged_df['original_index'].max() + 1)
             
-            # Crear la columna editable con la lógica especificada
             merged_df['Value_editable'] = merged_df.apply(
                 lambda row: row['Value_site1'] if pd.isna(row['Value_site2']) or row['Value_site2'] == 'None' 
                 else row['Value_site2'],
                 axis=1
             )
             
-            # Renombrar columnas
             merged_df = merged_df.rename(columns={
                 'Value_site1': 'Valor Sitio 1',
                 'Value_site2': 'Valor Sitio 2',
                 'Value_editable': 'Valor Final'
             })
             
-            # Ordenar por el índice original y eliminarlo
-            merged_df = merged_df.sort_values('original_index').drop('original_index', axis=1)
-            return merged_df
+            return merged_df.sort_values('original_index').drop('original_index', axis=1)
             
         elif df1 is not None:
             return df1.assign(**{
@@ -91,9 +82,8 @@ def init_session_state():
 def setup_page():
     """Configura la página y el diseño inicial"""
     st.set_page_config(layout="wide")
-    # Centrar el título usando HTML
     st.markdown("<h1 style='text-align: center;'>Extracción de datos para homologación</h1>", unsafe_allow_html=True)
-    
+
 def render_url_inputs():
     """Renderiza los campos de entrada de URL"""
     st.subheader("Ingreso de URLs")
@@ -104,32 +94,72 @@ def render_url_inputs():
         url_site2 = st.text_input("URL del Sitio 2 (Página alemana):", key="url2")
     return url_site1, url_site2
 
-def render_search_bar():
-    """Renderiza la barra de búsqueda"""
-    return st.text_input(
-        "🔍 Buscar por característica:",
-        value=st.session_state.search_term,
-        key="search_input",
-        placeholder="Escriba para filtrar..."
-    )
-
 def filter_dataframe(df, search_term):
     """Filtra el dataframe según el término de búsqueda"""
     if not search_term:
         return df
     mask = df['Key'].str.contains(search_term, case=False, na=False)
-    filtered_df = df[mask].copy()
-    return filtered_df
+    return df[mask].copy()
 
-def update_dataframe_with_edits(original_df, edited_df, search_term):
-    """Actualiza el dataframe original con los cambios realizados en la vista filtrada"""
-    if search_term:
-        # Obtener los índices de las filas filtradas
-        mask = original_df['Key'].str.contains(search_term, case=False, na=False)
-        # Actualizar solo los valores finales de las filas filtradas
-        original_df.loc[mask, 'Valor Final'] = edited_df['Valor Final'].values
-    else:
-        original_df['Valor Final'] = edited_df['Valor Final']
+def render_aggrid(df):
+    """Renderiza la tabla usando AgGrid"""
+    # Resetear el índice y hacerlo una columna
+    df = df.reset_index(drop=False)
+    
+    gb = GridOptionsBuilder.from_dataframe(df)
+    
+    # Configurar columnas
+    gb.configure_column('index', 
+                        header_name="Índice",
+                        hide=True)  # Ocultar la columna de índice en la tabla
+    gb.configure_column('Key', 
+                       header_name="Característica",
+                       editable=False,
+                       sortable=True,
+                       filter=True)
+    gb.configure_column('Valor Sitio 1',
+                       header_name="Valor Sitio 1",
+                       editable=False)
+    gb.configure_column('Valor Sitio 2',
+                       header_name="Valor Sitio 2",
+                       editable=False)
+    gb.configure_column('Valor Final',
+                       header_name="Valor Final (Editable)",
+                       editable=True)
+    
+    # Configuraciones adicionales
+    gb.configure_default_column(min_column_width=200)
+    gb.configure_grid_options(domLayout='normal')
+    gb.configure_selection(selection_mode='single', use_checkbox=False)
+    
+    grid_options = gb.build()
+    
+    return AgGrid(
+        df,
+        gridOptions=grid_options,
+        update_mode=GridUpdateMode.MODEL_CHANGED,
+        fit_columns_on_grid_load=True,
+        theme='alpine',
+        height=500,
+        allow_unsafe_jscode=True,
+        key=f"grid_{hash(str(df.index.values))}"
+    )
+
+def update_dataframe_values(original_df, updated_data):
+    """
+    Actualiza el DataFrame original con los valores modificados
+    """
+    updated_df = pd.DataFrame(updated_data)
+    
+    for _, row in updated_df.iterrows():
+        original_idx = row['index']  # Obtener el índice original
+        new_value = row['Valor Final']
+        
+        # Verificar si el valor ha cambiado
+        if original_df.loc[original_idx, 'Valor Final'] != new_value:
+            # Actualizar el DataFrame original
+            original_df.loc[original_idx, 'Valor Final'] = new_value
+    
     return original_df
 
 def main():
@@ -164,45 +194,47 @@ def main():
         st.subheader("Resultados")
         
         # Barra de búsqueda
-        search_term = render_search_bar()
+        search_term = st.text_input(
+            "🔍 Buscar por característica:",
+            value=st.session_state.search_term,
+            key="search_input",
+            placeholder="Escriba para filtrar..."
+        )
+        
+        # Actualizar el término de búsqueda en la sesión
         st.session_state.search_term = search_term
         
-        # Filtrar datos según la búsqueda
+        # Filtrar y mostrar datos
         filtered_df = filter_dataframe(st.session_state.merged_df, search_term)
-        
-        # Mostrar tabla
-        edited_df = st.data_editor(
-            filtered_df,
-            disabled=["Key", "Valor Sitio 1", "Valor Sitio 2"],
-            hide_index=True,
-            column_config={
-                "Key": st.column_config.TextColumn(
-                    "Característica",
-                    width="large",
-                ),
-                "Valor Sitio 1": st.column_config.TextColumn(
-                    "Valor Sitio 1",
-                    width="large",
-                ),
-                "Valor Sitio 2": st.column_config.TextColumn(
-                    "Valor Sitio 2",
-                    width="large",
-                ),
-                "Valor Final": st.column_config.TextColumn(
-                    "Valor Final (Editable)",
-                    width="large",
-                ),
-            },
-            use_container_width=True,
-            key="data_editor"
-        )
-        
-        # Actualizar el dataframe en session_state
-        st.session_state.merged_df = update_dataframe_with_edits(
-            st.session_state.merged_df, 
-            edited_df, 
-            search_term
-        )
+        if filtered_df is not None and not filtered_df.empty:
+            # Obtener la respuesta de AgGrid
+            grid_response = render_aggrid(filtered_df)
+            
+            if grid_response['data'] is not None:
+                # Actualizar el DataFrame original con los cambios
+                st.session_state.merged_df = update_dataframe_values(
+                    st.session_state.merged_df,
+                    grid_response['data']
+                )
+
+            # Exportar a Word
+            if st.button("Transformar a Word", type="primary"):
+                with st.spinner('Preparando documento...'):
+                    exporter = WordExporter("C:\\Users\\usuario\\Desktop\\ProyectosPersonalesMaxi\\autoMM\\Utils\\planilla.docx")
+                    doc_bytes = exporter.export_to_word(st.session_state.merged_df)
+                    
+                    if doc_bytes:
+                        st.download_button(
+                            label="📥 Descargar documento Word",
+                            data=doc_bytes,
+                            file_name="datos_exportados.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+                        st.success('¡Documento preparado! Haz clic en el botón de descarga para guardarlo.')
+                    else:
+                        st.error('Error al generar el documento.')
+        else:
+            st.info("No se encontraron resultados para la búsqueda.")
 
 if __name__ == "__main__":
     main()

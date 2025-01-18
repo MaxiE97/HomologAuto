@@ -29,6 +29,7 @@ class VehicleDataTransformer_site2:
         df = self._process_transmission(df)
         df = self._process_drive_ratio(df)
         df= self._add_missing_keys(df)
+        df = self._process_Rear_overhang(df)
 
         df = self._sort_and_clean(df)
         return df
@@ -104,10 +105,24 @@ class VehicleDataTransformer_site2:
             # Crea una nueva fila con los máximos
             new_row = pd.DataFrame({
                 "Key": ["Maximum mass of trailer – braked / unbraked"],
-                "Value": [f"{braked_max} / {unbraked_max}"]  # Resultado: "1000 / 1222"
+                "Value": [f"{braked_max}/{unbraked_max}"]  # Resultado: "1000 / 1222"
             })
 
             df = pd.concat([df, new_row], ignore_index=True)
+
+        return df
+    
+    def _process_Rear_overhang(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Procesa y combina la información de Rear overhang"""
+        if "Rear overhang" in df["Key"].values: 
+            rear = df[df["Key"] == "Rear overhang"]["Value"].values[0]      
+            
+            # elimina el primer "/" de "/ 869 - 869"
+            rear = rear.split("/")[1]
+
+            # guarda el nuevo valor
+            df.loc[df["Key"] == "Rear overhang", "Value"] = rear
+            
 
         return df
 
