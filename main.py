@@ -51,21 +51,21 @@ class DataProcessor:
             })
             
             return merged_df.sort_values('original_index').drop('original_index', axis=1)
-            
+                
         elif df1 is not None:
             return df1.assign(**{
                 'Valor Sitio 1': df1['Value'],
                 'Valor Sitio 2': None,
                 'Valor Final': df1['Value']
             })[['Key', 'Valor Sitio 1', 'Valor Sitio 2', 'Valor Final']]
-            
+                
         elif df2 is not None:
             return df2.assign(**{
                 'Valor Sitio 1': None,
                 'Valor Sitio 2': df2['Value'],
                 'Valor Final': df2['Value']
             })[['Key', 'Valor Sitio 1', 'Valor Sitio 2', 'Valor Final']]
-            
+                
         return None
 
 def init_session_state():
@@ -78,6 +78,16 @@ def init_session_state():
         st.session_state.merged_df = None
     if 'search_term' not in st.session_state:
         st.session_state.search_term = ""
+
+    # Opciones de idioma y rutas de plantillas
+    if 'language_options' not in st.session_state:
+        st.session_state.language_options = {
+            'Inglés': "C:\\Users\\usuario\\Desktop\\ProyectosPersonalesMaxi\\autoMM\\Utils\\planillaIngles.docx",
+            'Alemán': "C:\\Users\\usuario\\Desktop\\ProyectosPersonalesMaxi\\autoMM\\Utils\\planillaAleman.docx"
+            # Agrega más idiomas y rutas si es necesario
+        }
+    if 'selected_language' not in st.session_state:
+        st.session_state.selected_language = list(st.session_state.language_options.keys())[0]  # Idioma por defecto
 
 def setup_page():
     """Configura la página y el diseño inicial"""
@@ -167,11 +177,11 @@ def main():
     setup_page()
     init_session_state()
     
-    # Instanciar el procesador de datos
-    processor = DataProcessor()
-    
     # Renderizar inputs
     url_site1, url_site2 = render_url_inputs()
+    
+    # Instanciar el procesador de datos
+    processor = DataProcessor()
     
     # Procesar datos
     if st.button("Procesar URLs", type="primary"):
@@ -216,11 +226,23 @@ def main():
                     st.session_state.merged_df,
                     grid_response['data']
                 )
-
+            
+            # Seleccionar idioma mediante radio buttons horizontales
+            st.subheader("Selecciona el idioma para la plantilla:")
+            st.session_state.selected_language = st.radio(
+                label="",
+                options=list(st.session_state.language_options.keys()),
+                index=0,
+                key="language_radio",
+                horizontal=True
+            )
+            
             # Exportar a Word
             if st.button("Transformar a Word", type="primary"):
                 with st.spinner('Preparando documento...'):
-                    exporter = WordExporter("C:\\Users\\usuario\\Desktop\\ProyectosPersonalesMaxi\\autoMM\\Utils\\planilla.docx")
+                    # Obtener la ruta de la plantilla según el idioma seleccionado
+                    planilla_path = st.session_state.language_options[st.session_state.selected_language]
+                    exporter = WordExporter(planilla_path)
                     doc_bytes = exporter.export_to_word(st.session_state.merged_df)
                     
                     if doc_bytes:
