@@ -33,9 +33,23 @@ class VehicleDataTransformer_site1:
         return df
 
     def _rename_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Renombra las columnas según el mapeo configurado."""
+        """Renombra las columnas según el mapeo configurado y asegura que todas las claves estén presentes."""
+        # Renombrar las columnas según el mapeo
         df["Key"] = df["Key"].map(lambda x: self.config.column_mapping.get(x, x))
+        
+        # Verificar claves faltantes y agregar filas con "None"
+        missing_keys = [
+            self.config.column_mapping[key]
+            for key in self.config.column_mapping.keys()
+            if self.config.column_mapping[key] not in df["Key"].values
+        ]
+        
+        if missing_keys:
+            missing_rows = [{"Key": key, "Value": "None"} for key in missing_keys]
+            df = pd.concat([df, pd.DataFrame(missing_rows)], ignore_index=True)
+        
         return df
+
 
     def _process_axle_wheel(self, df: pd.DataFrame) -> pd.DataFrame:
         """Procesa y combina la información de los ejes y ruedas."""

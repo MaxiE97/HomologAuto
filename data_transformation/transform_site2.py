@@ -35,8 +35,21 @@ class VehicleDataTransformer_site2:
         return df
 
     def _rename_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Renombra las columnas según el mapeo configurado."""
+        """Renombra las columnas según el mapeo configurado y asegura que todas las claves estén presentes."""
+        # Renombrar las columnas según el mapeo
         df["Key"] = df["Key"].map(lambda x: self.config.column_mapping.get(x, x))
+        
+        # Verificar claves faltantes y agregar filas con "None"
+        missing_keys = [
+            self.config.column_mapping[key]
+            for key in self.config.column_mapping.keys()
+            if self.config.column_mapping[key] not in df["Key"].values
+        ]
+        
+        if missing_keys:
+            missing_rows = [{"Key": key, "Value": "None"} for key in missing_keys]
+            df = pd.concat([df, pd.DataFrame(missing_rows)], ignore_index=True)
+        
         return df
 
     def _process_axle_tracks(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -232,13 +245,21 @@ class VehicleDataTransformer_site2:
 
         transmission_value = self._get_value_slash(transmission, 0)
 
-        if "m" in transmission_value:
-          Geabox = "Manual"
+        if "a" in transmission_value:
+            Gearbox = "Automatic"
+        elif "m" in transmission_value:
+            Gearbox = "Manual"
+        elif "s" in transmission_value:
+            Gearbox = "Automatic"
+        else:
+            Gearbox = "Unknown"
+
         new_row = pd.DataFrame({
             "Key": ["Gearbox"],
-            "Value": [f"{Geabox}"]
-            })
+            "Value": [f"{Gearbox}"]
+        })
         df = pd.concat([df, new_row], ignore_index=True)
+
 
 
         match = re.search(r'\d+', transmission_value)

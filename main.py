@@ -82,8 +82,8 @@ def init_session_state():
     # Opciones de idioma y rutas de plantillas
     if 'language_options' not in st.session_state:
         st.session_state.language_options = {
-            'Inglés': "C:\\Users\\usuario\\Desktop\\ProyectosPersonalesMaxi\\autoMM\\Utils\\planillaIngles.docx",
-            'Alemán': "C:\\Users\\usuario\\Desktop\\ProyectosPersonalesMaxi\\autoMM\\Utils\\planillaAleman.docx"
+            'Inglés': "Utils/planillaIngles.docx",
+            'Alemán': "Utils/planillaAleman.docx"
             # Agrega más idiomas y rutas si es necesario
         }
     if 'selected_language' not in st.session_state:
