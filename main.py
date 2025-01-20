@@ -239,19 +239,6 @@ def main():
             )
 
 
-            # Obtener la ruta de la plantilla según el idioma seleccionado
-            planilla_path = st.session_state.language_options[st.session_state.selected_language]
-
-            # Comprobar si la ruta de la plantilla es válida
-            current_dir = os.getcwd()  # Directorio de trabajo actual
-            full_path = os.path.join(current_dir, planilla_path)
-
-            if os.path.exists(full_path):
-                st.success(f"Plantilla encontrada: {full_path}")
-                # Crear el exportador y continuar
-                exporter = WordExporter(full_path)
-            else:
-                st.error(f"No se encontró la plantilla en la ruta: {full_path}")
             
             # Exportar a Word
             if st.button("Transformar a Word", type="primary"):
