@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import os 
 from st_aggrid import AgGrid, GridUpdateMode, GridOptionsBuilder
 from scraping.scraping_site_1 import Site1Scraper
 from scraping.scraping_site_2 import Site2Scraper
@@ -236,6 +237,21 @@ def main():
                 key="language_radio",
                 horizontal=True
             )
+
+
+            # Obtener la ruta de la plantilla según el idioma seleccionado
+            planilla_path = st.session_state.language_options[st.session_state.selected_language]
+
+            # Comprobar si la ruta de la plantilla es válida
+            current_dir = os.getcwd()  # Directorio de trabajo actual
+            full_path = os.path.join(current_dir, planilla_path)
+
+            if os.path.exists(full_path):
+                st.success(f"Plantilla encontrada: {full_path}")
+                # Crear el exportador y continuar
+                exporter = WordExporter(full_path)
+            else:
+                st.error(f"No se encontró la plantilla en la ruta: {full_path}")
             
             # Exportar a Word
             if st.button("Transformar a Word", type="primary"):
